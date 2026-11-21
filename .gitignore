@@ -1,0 +1,4 @@
+.checklist-*
+data/
+node_modules/
+*.tgz

@@ -1,0 +1,20 @@
+name: checklist
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - data:/data
+    networks:
+      edge:
+        aliases: [checklist-web]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+volumes:
+  data:
+networks:
+  edge:
+    name: edge_default
+    external: true

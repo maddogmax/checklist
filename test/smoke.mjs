@@ -1,0 +1,40 @@
+// Run against a disposable instance started with DB_PATH=:memory:.
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+const base=process.env.TEST_URL || 'http://127.0.0.1:8080';
+const password=randomUUID(), email=randomUUID()+'@example.invalid';
+let cookie='';
+async function call(action, body, status=200){
+  const r=await fetch(base+'/api/'+action,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',cookie},body:body?JSON.stringify(body):undefined});
+  assert.equal(r.status,status,action);
+  const session=r.headers.get('set-cookie');
+  if(session)cookie=session.split(';')[0];
+  return r.json();
+}
+await call('state',null,401);
+await call('register',{name:'Тест',email,password});
+await call('logout',{});
+await call('login',{email,password});
+const project=(await call('project',{name:'Первый',description:'План'})).id;
+const second=(await call('project',{name:'Второй'})).id;
+const grp=(await call('group',{project,name:'Этап'})).id;
+const priority=(await call('priority',{name:'Важный',color:'#7755aa'})).id;
+await call('priority',{id:priority,name:'Срочно',color:'#aa3355'});
+const data={name:'Проверка',project,grp,priority,description:'Три строки',deadline:'2027-03-02'};
+const id=(await call('task',data)).id;
+const other=(await call('task',{...data,name:'Вторая'})).id;
+await call('move',{id:other,grp,before:id});
+let state=await call('state');
+assert.deepEqual(state.tasks.map(t=>t.id),[other,id]);
+await call('task',{...data,id,project:second},400);
+await call('task',{...data,id,project:second,grp:null,deadline:''});
+await call('toggle',{id,done:true});
+state=await call('state');
+const task=state.tasks.find(t=>t.id===id);
+assert.deepEqual([task.done,task.grp,task.project,task.deadline],[1,null,second,'']);
+assert.equal(state.priorities.at(-1).color,'#aa3355');
+await call('logout',{});
+await call('register',{name:'Другой',email:randomUUID()+'@example.invalid',password});
+assert.equal((await call('state')).projects.length,0);
+await call('toggle',{id,done:false},404);
+console.log('PASS registration, login, isolation, project and group changes, priorities, ordering, deadline and completion');
